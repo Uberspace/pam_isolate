@@ -1,0 +1,11 @@
+[package]
+name = "pam_isolate"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "pam_isolate"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+pam-bindings = "0.1.1"
