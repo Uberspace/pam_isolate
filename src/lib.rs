@@ -12,6 +12,8 @@ use pam::{constants::PamResultCode, module::PamHandle};
 use crate::config::Config;
 
 mod config;
+mod sched_bindings;
+use sched_bindings::{unshare, CLONE_FS};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -33,6 +35,12 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
             return Ok(());
         }
     }
+
+    if unsafe { unshare(CLONE_FS as _) } == -1 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+
+    log::debug!("[pam_isolate] unshare(CLONE_FS) successful.");
 
     // continue here
     log::info!("[pam_isolate] User logged in");

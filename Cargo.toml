@@ -15,3 +15,6 @@ pam-bindings = "0.1.1"
 serde = { version = "1.0.156", features = ["derive"] }
 systemd-journal-logger = "0.7.0"
 toml = "0.7.3"
+
+[build-dependencies]
+bindgen = "0.64.0"
