@@ -8,4 +8,8 @@ name = "pam_isolate"
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
+anyhow = "1.0.69"
+clap = { version = "4.1.8", features = ["derive"] }
 pam-bindings = "0.1.1"
+serde = { version = "1.0.156", features = ["derive"] }
+toml = "0.7.3"
