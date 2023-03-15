@@ -1,6 +1,6 @@
 use core::slice;
 use std::{
-    ffi::{c_char, c_int, CStr, OsStr},
+    ffi::{c_char, c_int, CStr, OsStr, OsString},
     os::unix::prelude::OsStrExt,
     path::PathBuf,
 };
@@ -50,9 +50,12 @@ pub unsafe extern "C" fn pam_sm_open_session(
     argc: c_int,
     argv: *const *const u8,
 ) -> PamResultCode {
-    let args = slice::from_raw_parts(argv, argc as _)
-        .iter()
-        .map(|arg| OsStr::from_bytes(CStr::from_ptr(*arg as *const i8).to_bytes()));
+    let arg0 = OsString::new();
+    let args = std::iter::once(arg0.as_ref()).chain(
+        slice::from_raw_parts(argv, argc as _)
+            .iter()
+            .map(|arg| OsStr::from_bytes(CStr::from_ptr(*arg as *const i8).to_bytes())),
+    );
 
     let args = Args::parse_from(args);
 
@@ -62,7 +65,7 @@ pub unsafe extern "C" fn pam_sm_open_session(
     match open_session(args, &*pamh) {
         Ok(()) => PamResultCode::PAM_SUCCESS,
         Err(err) => {
-            log::error!("Error: {err}");
+            log::error!("[pam_isolate] {err}");
             PamResultCode::PAM_ABORT
         }
     }
