@@ -3,9 +3,15 @@ use std::path::Path;
 use serde::Deserialize;
 
 #[derive(Debug, Default, Deserialize)]
+pub struct Users {
+    #[serde(default)]
+    pub ignore: Vec<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
 pub struct Config {
     #[serde(default)]
-    pub ignore_users: Vec<String>,
+    pub users: Users,
 }
 
 impl Config {

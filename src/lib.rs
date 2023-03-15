@@ -24,11 +24,11 @@ struct Args {
 fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
     let config = Config::load(args.config)?;
 
-    if !config.ignore_users.is_empty() {
+    if !config.users.ignore.is_empty() {
         let user = pamh
             .get_user(None)
             .map_err(|err| anyhow::anyhow!("{err:?}"))?;
-        if config.ignore_users.contains(&user) {
+        if config.users.ignore.contains(&user) {
             return Ok(());
         }
     }
