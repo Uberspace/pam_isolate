@@ -29,6 +29,7 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
             .get_user(None)
             .map_err(|err| anyhow::anyhow!("{err:?}"))?;
         if config.users.ignore.contains(&user) {
+            log::debug!("[pam_isolate] Ignored user {user}.");
             return Ok(());
         }
     }
