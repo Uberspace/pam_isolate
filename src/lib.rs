@@ -34,6 +34,7 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
     }
 
     // continue here
+    log::info!("[pam_isolate] User logged in");
 
     Ok(())
 }
