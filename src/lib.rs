@@ -6,6 +6,7 @@ use std::{
 };
 
 use clap::Parser;
+use log::LevelFilter;
 use pam::{constants::PamResultCode, module::PamHandle};
 
 use crate::config::Config;
@@ -16,6 +17,8 @@ mod config;
 struct Args {
     #[arg(short, long)]
     config: PathBuf,
+    #[arg(short, long, default_value_t = LevelFilter::Warn)]
+    log_level: LevelFilter,
 }
 
 fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
@@ -52,10 +55,13 @@ pub unsafe extern "C" fn pam_sm_open_session(
 
     let args = Args::parse_from(args);
 
+    systemd_journal_logger::init().unwrap();
+    log::set_max_level(args.log_level);
+
     match open_session(args, &*pamh) {
         Ok(()) => PamResultCode::PAM_SUCCESS,
         Err(err) => {
-            eprintln!("Error: {err}");
+            log::error!("Error: {err}");
             PamResultCode::PAM_ABORT
         }
     }

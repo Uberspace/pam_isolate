@@ -10,6 +10,8 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 anyhow = "1.0.69"
 clap = { version = "4.1.8", features = ["derive"] }
+log = { version = "0.4.17", features = ["serde"] }
 pam-bindings = "0.1.1"
 serde = { version = "1.0.156", features = ["derive"] }
+systemd-journal-logger = "0.7.0"
 toml = "0.7.3"
