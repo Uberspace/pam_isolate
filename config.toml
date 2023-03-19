@@ -1,2 +1,6 @@
 [users]
 ignore = ["root"]
+
+[mount]
+tmp = "/tmp"
+size = "100M"

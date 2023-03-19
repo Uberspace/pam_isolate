@@ -9,9 +9,16 @@ pub struct Users {
 }
 
 #[derive(Debug, Default, Deserialize)]
+pub struct Mount {
+    pub tmp: String,
+    pub size: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub users: Users,
+    pub mount: Mount,
 }
 
 impl Config {
