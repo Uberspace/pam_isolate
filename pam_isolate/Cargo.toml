@@ -19,6 +19,8 @@ tokio = { version = "1.26.0", features = ["rt"] }
 netlink-packet-route = "0.15.0"
 rtnetlink = "0.12.0"
 fs4 = "0.6.3"
+nix = { version = "0.26.2", default-features = false, features = ["mount", "user", "sched"] }
+etc-passwd = "0.2.0"
 
 [build-dependencies]
 bindgen = "0.64.0"

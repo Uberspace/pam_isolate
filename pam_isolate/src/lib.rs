@@ -7,6 +7,7 @@ use std::{
 };
 
 use clap::Parser;
+use etc_passwd::Passwd;
 use fs4::FileExt;
 use log::LevelFilter;
 use pam::{constants::PamResultCode, module::PamHandle};
@@ -16,8 +17,6 @@ use crate::config::Config;
 
 mod bindings;
 mod config;
-
-use bindings::{getpwnam, mount, umount, unshare, CLONE_NEWNS, MS_NODEV, MS_NOEXEC, MS_NOSUID};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -95,13 +94,21 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let user_c = CString::new(user.clone()).unwrap();
-    let passwd = unsafe { getpwnam(user_c.as_ptr()) };
-    let uid = unsafe { (*passwd).pw_uid };
+    let Some(passwd) = Passwd::from_name(CString::new(user.clone())?)? else {
+        log::error!("[pam_isolate] Unknown user name {user}");
+        return Ok(());
+    };
 
-    let run_path: PathBuf = ["/", "var", "run", "user", &uid.to_string(), "pam_isolate"]
-        .iter()
-        .collect();
+    let run_path: PathBuf = [
+        "/",
+        "var",
+        "run",
+        "user",
+        &passwd.uid.to_string(),
+        "pam_isolate",
+    ]
+    .iter()
+    .collect();
     std::fs::create_dir_all(&run_path).expect("mkdir {run_path}");
 
     let mut lock_path = run_path.clone();
@@ -151,7 +158,6 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
 
     // drop(options);
     // drop(path);
-    drop(user_c);
 
     // continue here
     log::info!("[pam_isolate] User logged in");
