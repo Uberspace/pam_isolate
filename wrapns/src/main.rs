@@ -2,7 +2,9 @@ use std::{ffi::CString, os::unix::prelude::OsStrExt};
 
 use anyhow::anyhow;
 use log::LevelFilter;
-use nix::unistd::{execv, getgid, getuid, setegid, seteuid, setuid, User, ROOT};
+use nix::unistd::{
+    execv, getegid, geteuid, getgid, getuid, setegid, seteuid, setgid, setuid, User, ROOT,
+};
 use uberspace_ns::{create_namespaces, Config};
 
 fn main() -> anyhow::Result<()> {
@@ -22,7 +24,9 @@ fn main() -> anyhow::Result<()> {
         .build()?;
 
     let uid = getuid();
+    let euid = geteuid();
     let gid = getgid();
+    let egid = getegid();
 
     let Some(passwd) = User::from_uid(uid)? else {
         log::error!("Unknown user with id {uid}");
@@ -34,11 +38,11 @@ fn main() -> anyhow::Result<()> {
         return Err(anyhow!("Ignored user"));
     }
 
-    setuid(ROOT)?;
+    setuid(euid)?;
+    setgid(egid)?;
     create_namespaces(&rt, &passwd.name, uid.as_raw(), &config.mount)?;
     setuid(uid)?;
-    seteuid(uid)?;
-    setegid(gid)?;
+    setgid(gid)?;
 
     execv(
         &CString::new(args[0].as_bytes())?,
