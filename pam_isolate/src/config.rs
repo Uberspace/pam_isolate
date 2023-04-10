@@ -1,17 +1,12 @@
 use std::path::Path;
 
 use serde::Deserialize;
+use uberspace_ns::Mount;
 
 #[derive(Debug, Default, Deserialize)]
 pub struct Users {
     #[serde(default)]
     pub ignore: Vec<String>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub struct Mount {
-    pub tmp: String,
-    pub size: String,
 }
 
 #[derive(Debug, Default, Deserialize)]
