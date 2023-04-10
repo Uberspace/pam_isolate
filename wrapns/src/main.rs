@@ -47,7 +47,7 @@ fn main() -> anyhow::Result<()> {
         &args
             .into_iter()
             .skip(1)
-            .map(|arg| CString::new(arg.as_bytes().to_vec()))
+            .map(|arg| CString::new(arg.as_bytes()))
             .collect::<Result<Vec<_>, _>>()?,
     )?;
 
