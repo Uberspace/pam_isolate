@@ -16,5 +16,5 @@ systemd-journal-logger = "0.7.0"
 pam-bindings = "0.1.1"
 serde = { version = "1.0.156", features = ["derive"] }
 tokio = { version = "1.26.0", features = ["rt"] }
-etc-passwd = "0.2.0"
 uberspace-ns = { path = "../uberspace-ns" }
+nix = { version = "0.26.2", default-features = false, features = ["user"] }

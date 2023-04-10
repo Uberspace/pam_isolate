@@ -1,19 +1,15 @@
 use core::slice;
 use std::{
-    ffi::{c_char, c_int, CStr, CString, OsStr, OsString},
+    ffi::{c_char, c_int, CStr, OsStr, OsString},
     os::unix::prelude::OsStrExt,
     path::PathBuf,
 };
 
 use clap::Parser;
-use etc_passwd::Passwd;
 use log::LevelFilter;
+use nix::unistd::User;
 use pam::{constants::PamResultCode, module::PamHandle};
-use uberspace_ns::create_namespaces;
-
-use crate::config::Config;
-
-mod config;
+use uberspace_ns::{create_namespaces, Config};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -38,12 +34,12 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let Some(passwd) = Passwd::from_name(CString::new(username.clone())?)? else {
+    let Some(passwd) = User::from_name(&username)? else {
         log::error!("[pam_isolate] Unknown user name {username}");
         return Ok(());
     };
 
-    create_namespaces(&rt, &username, passwd.uid, &config.mount)?;
+    create_namespaces(&rt, &username, passwd.uid.into(), &config.mount)?;
 
     log::info!("[pam_isolate] User logged in");
 
