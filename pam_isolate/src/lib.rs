@@ -15,7 +15,6 @@ use rtnetlink::{new_connection, NetworkNamespace};
 
 use crate::config::Config;
 
-mod bindings;
 mod config;
 
 #[derive(Parser, Debug)]
