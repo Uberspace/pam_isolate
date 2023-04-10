@@ -140,7 +140,7 @@ pub fn create_namespaces(
     lock_file.lock_exclusive()?;
 
     // We have to make sure to unlock the file afterwards, even in the case of an error!
-    match create_namespaces_exclusive(
+    let result = create_namespaces_exclusive(
         rt,
         username,
         uid,
@@ -148,14 +148,8 @@ pub fn create_namespaces(
         mount_config,
         &mut lock_file,
         run_path,
-    ) {
-        Ok(_) => {
-            lock_file.unlock()?;
-            Ok(())
-        }
-        Err(e) => {
-            lock_file.unlock()?;
-            Err(e)
-        }
-    }
+    );
+    lock_file.unlock()?;
+
+    result
 }
