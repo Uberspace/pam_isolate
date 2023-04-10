@@ -43,9 +43,10 @@ fn main() -> anyhow::Result<()> {
     setgid(gid)?;
 
     execv(
-        &CString::new(args[0].as_bytes())?,
+        &CString::new(args[1].as_bytes())?,
         &args
             .into_iter()
+            .skip(1)
             .map(|arg| CString::new(arg.as_bytes().to_vec()))
             .collect::<Result<Vec<_>, _>>()?,
     )?;
