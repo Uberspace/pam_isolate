@@ -2,9 +2,7 @@ use std::{ffi::CString, os::unix::prelude::OsStrExt};
 
 use anyhow::anyhow;
 use log::LevelFilter;
-use nix::unistd::{
-    execv, getegid, geteuid, getgid, getuid, setegid, seteuid, setgid, setuid, User, ROOT,
-};
+use nix::unistd::{execv, getegid, geteuid, getgid, getuid, setgid, setuid, User};
 use uberspace_ns::{create_namespaces, Config};
 
 fn main() -> anyhow::Result<()> {
