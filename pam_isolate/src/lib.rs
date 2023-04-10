@@ -26,20 +26,24 @@ struct Args {
 fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
     let config = Config::load(args.config)?;
 
-    let user = pamh
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+
+    let username = pamh
         .get_user(None)
         .map_err(|err| anyhow::anyhow!("get_user: {err:?}"))?;
-    if !config.users.ignore.is_empty() && config.users.ignore.contains(&user) {
-        log::debug!("[pam_isolate] Ignored user {user}.");
+    if !config.users.ignore.is_empty() && config.users.ignore.contains(&username) {
+        log::debug!("[pam_isolate] Ignored user {username}.");
         return Ok(());
     }
 
-    let Some(passwd) = Passwd::from_name(CString::new(user.clone())?)? else {
-        log::error!("[pam_isolate] Unknown user name {user}");
+    let Some(passwd) = Passwd::from_name(CString::new(username.clone())?)? else {
+        log::error!("[pam_isolate] Unknown user name {username}");
         return Ok(());
     };
 
-    create_namespaces(&user, passwd.uid, &config.mount)?;
+    create_namespaces(&rt, &username, passwd.uid, &config.mount)?;
 
     log::info!("[pam_isolate] User logged in");
 
