@@ -2,14 +2,10 @@ use std::{fs::File, path::PathBuf};
 
 use fs4::FileExt;
 use rtnetlink::{new_connection, NetworkNamespace};
-use serde::Deserialize;
 use tokio::runtime::Runtime;
 
-#[derive(Debug, Default, Deserialize)]
-pub struct Mount {
-    pub tmp: String,
-    pub size: String,
-}
+mod config;
+pub use config::*;
 
 async fn create_interface(username: &str) -> anyhow::Result<()> {
     log::debug!("[pam_isolate] Starting network setup");
@@ -66,7 +62,7 @@ pub fn create_namespaces(
     rt: &Runtime,
     username: &str,
     uid: u32,
-    _mount: &Mount,
+    _mount: &config::Mount,
 ) -> anyhow::Result<()> {
     let run_path: PathBuf = ["/", "var", "run", "user", &uid.to_string(), "pam_isolate"]
         .iter()

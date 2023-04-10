@@ -13,7 +13,7 @@ use uberspace_ns::{create_namespaces, Config};
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[arg(short, long)]
+    #[arg(short, long, value_hint = clap::ValueHint::DirPath)]
     config: PathBuf,
     #[arg(short, long, default_value_t = LevelFilter::Warn)]
     log_level: LevelFilter,

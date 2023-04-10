@@ -14,3 +14,4 @@ netlink-packet-route = "0.15.0"
 serde = { version = "1.0.159", features = ["serde_derive"] }
 tokio = { version = "1.26.0" }
 nix = { version = "0.26.2", default-features = false, features = ["mount", "user", "sched"] }
+toml = "0.7.3"
