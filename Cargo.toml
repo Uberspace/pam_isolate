@@ -1,24 +1,2 @@
-[package]
-name = "pam_isolate"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-name = "pam_isolate"
-crate-type = ["rlib", "cdylib"]
-
-[dependencies]
-anyhow = "1.0.69"
-clap = { version = "4.1.8", features = ["derive"] }
-log = { version = "0.4.17", features = ["serde"] }
-toml = "0.7.3"
-systemd-journal-logger = "0.7.0"
-pam-bindings = "0.1.1"
-serde = { version = "1.0.156", features = ["derive"] }
-tokio = { version = "1.26.0", features = ["rt"] }
-netlink-packet-route = "0.15.0"
-rtnetlink = "0.12.0"
-fs4 = "0.6.3"
-
-[build-dependencies]
-bindgen = "0.64.0"
+[workspace]
+members = ["pam_isolate"]
