@@ -1,6 +1,17 @@
-use std::{fs::File, path::PathBuf};
+use std::{
+    fmt::Write,
+    fs::{File, OpenOptions},
+    io::Read,
+    os::fd::IntoRawFd,
+    path::PathBuf,
+};
 
 use fs4::FileExt;
+use nix::{
+    mount::{mount, umount, MsFlags},
+    sched::{setns, unshare, CloneFlags},
+    unistd::{Gid, Uid},
+};
 use rtnetlink::{new_connection, NetworkNamespace};
 use tokio::runtime::Runtime;
 
@@ -58,11 +69,63 @@ async fn create_interface(username: &str) -> anyhow::Result<()> {
     }
 }
 
+fn create_namespaces_exclusive(
+    rt: &Runtime,
+    username: &str,
+    uid: Uid,
+    gid: Gid,
+    mount_config: &config::Mount,
+    lock_file: &mut File,
+    mut mnt_ns_path: PathBuf,
+) -> anyhow::Result<()> {
+    rt.block_on(create_interface(username))?;
+
+    mnt_ns_path.push("mnt.ns");
+    log::debug!("[pam_isolate] mount namespace file path: {mnt_ns_path:?}");
+
+    let mut lock_data = String::new();
+    lock_file.read_to_string(&mut lock_data)?;
+
+    if lock_data.is_empty() {
+        unshare(CloneFlags::CLONE_NEWNS)?;
+        log::debug!("[pam_isolate] unshare(CLONE_NEWNS) successful.");
+        mount(
+            Some("/proc/self/ns/mnt"),
+            &mnt_ns_path,
+            None::<&PathBuf>,
+            MsFlags::MS_BIND,
+            None::<&str>,
+        )?;
+
+        umount(mount_config.tmp.as_str())?;
+        mount(
+            Some("tmpfs"),
+            mount_config.tmp.as_str(),
+            Some("tmpfs"),
+            MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV,
+            Some(
+                format!(
+                    "size={},uid={},gid={},mode=777",
+                    mount_config.size, uid, gid,
+                )
+                .as_str(),
+            ),
+        )?;
+
+        lock_data.write_str("initialized")?;
+    } else {
+        let mntns = File::open(mnt_ns_path)?;
+        setns(mntns.into_raw_fd(), CloneFlags::CLONE_NEWNS)?;
+    }
+    Ok(())
+}
+
 pub fn create_namespaces(
     rt: &Runtime,
     username: &str,
-    uid: u32,
-    _mount: &config::Mount,
+    uid: Uid,
+    gid: Gid,
+    mount_config: &config::Mount,
 ) -> anyhow::Result<()> {
     let run_path: PathBuf = ["/", "var", "run", "user", &uid.to_string(), "pam_isolate"]
         .iter()
@@ -72,50 +135,27 @@ pub fn create_namespaces(
     let mut lock_path = run_path.clone();
     lock_path.push("lockfile");
     log::debug!("[pam_isolate] lock file path: {lock_path:?}");
-    let mut mnt_ns_path = run_path;
-    mnt_ns_path.push("mnt.ns");
-    log::debug!("[pam_isolate] mount namespace file path: {mnt_ns_path:?}");
 
-    let lock_file = File::create(lock_path)?;
+    let mut lock_file = OpenOptions::new().create(true).open(lock_path)?;
     lock_file.lock_exclusive()?;
-    rt.block_on(create_interface(username))?;
 
-    // if unsafe { unshare(CLONE_NEWNS as _) } == -1 {
-    //     return Err(std::io::Error::last_os_error()).context("unshare");
-    // }
-    // log::debug!("[pam_isolate] unshare(CLONE_NEWNS) successful.");
-
-    // let mnt_ns: PathBuf = ["/", "proc", "self", "ns", "mnt"].iter().collect();
-
-    // const TMPFS_RAW: &[u8; 6] = b"tmpfs\0";
-    // let path = CString::new(config.mount.tmp).unwrap();
-    // let options = CString::new(format!(
-    //     "size={},uid={},gid={},mode=777",
-    //     config.mount.size,
-    //     unsafe { (*passwd).pw_uid },
-    //     unsafe { (*passwd).pw_gid }
-    // ))
-    // .unwrap();
-
-    // if unsafe { umount(path.as_ptr() as _) } == -1 {
-    //     return Err(std::io::Error::last_os_error()).context("umount");
-    // }
-
-    // if unsafe {
-    //     mount(
-    //         TMPFS_RAW.as_ptr() as _,
-    //         path.as_ptr() as _,
-    //         TMPFS_RAW.as_ptr() as _,
-    //         (MS_NOEXEC | MS_NOSUID | MS_NODEV) as _,
-    //         options.as_ptr() as _,
-    //     )
-    // } == -1
-    // {
-    //     return Err(std::io::Error::last_os_error()).context("mount");
-    // }
-
-    // drop(options);
-    // drop(path);
-
-    Ok(())
+    // We have to make sure to unlock the file afterwards, even in the case of an error!
+    match create_namespaces_exclusive(
+        rt,
+        username,
+        uid,
+        gid,
+        mount_config,
+        &mut lock_file,
+        run_path,
+    ) {
+        Ok(_) => {
+            lock_file.unlock()?;
+            Ok(())
+        }
+        Err(e) => {
+            lock_file.unlock()?;
+            Err(e)
+        }
+    }
 }
