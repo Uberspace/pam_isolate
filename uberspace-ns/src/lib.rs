@@ -149,7 +149,11 @@ pub fn create_namespaces(
         &mut lock_file,
         run_path,
     );
-    lock_file.unlock()?;
+    let result2 = lock_file.unlock();
 
-    result
+    if result.is_err() {
+        result
+    } else {
+        result2.map_err(|err| err.into())
+    }
 }
