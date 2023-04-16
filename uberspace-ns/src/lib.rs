@@ -1,16 +1,15 @@
 use std::{
-    fs::{File, OpenOptions},
-    io::{Read, Write},
+    fs::{read_dir, OpenOptions},
     path::{Path, PathBuf},
 };
 
 use fs4::FileExt;
 use nix::{
-    fcntl::{open, readlink, OFlag},
+    fcntl::{open, OFlag},
     mount::{mount, umount, MsFlags},
     sched::{setns, unshare, CloneFlags},
     sys::stat::Mode,
-    unistd::{close, symlinkat, unlink, Gid, Uid},
+    unistd::{close, Gid, Pid, Uid},
 };
 use rtnetlink::{new_connection, NetworkNamespace};
 use tokio::runtime::Runtime;
@@ -56,30 +55,53 @@ async fn create_interface(username: &str, uid: Uid) -> anyhow::Result<()> {
     }
 }
 
+fn get_first_process_by_uid(uid: Uid) -> anyhow::Result<Option<Pid>> {
+    // Read the '/proc' directory
+    let proc_dir = read_dir("/proc")?;
+
+    // Find the PID of a process belonging to the specified user
+    for entry in proc_dir.flatten() {
+        let entry_path = entry.path();
+        if let Some(pid_str) = entry_path.file_name().and_then(|s| s.to_str()) {
+            if let Ok(pid) = pid_str.parse::<i32>() {
+                // Check if the process belongs to the specified user
+                if let Ok(status) = nix::sys::stat::stat(entry_path.join("status").as_path()) {
+                    if Uid::from_raw(status.st_uid) == uid {
+                        return Ok(Some(Pid::from_raw(pid)));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(None)
+}
+
 fn create_namespaces_exclusive(
     rt: &Runtime,
     username: &str,
     uid: Uid,
     gid: Gid,
     mount_config: &config::Mount,
-    lock_file: &mut File,
-    mut mnt_ns_path: PathBuf,
 ) -> anyhow::Result<()> {
     rt.block_on(create_interface(username, uid))?;
 
-    mnt_ns_path.push("mnt.ns");
-    log::debug!("[pam_isolate] mount namespace file path: {mnt_ns_path:?}");
+    let first_pid = get_first_process_by_uid(uid)?;
 
-    let mut lock_data = String::new();
-    lock_file.read_to_string(&mut lock_data)?;
-
-    if lock_data.is_empty() {
+    if let Some(first_pid) = first_pid {
+        log::info!("Attaching to namespace of pid {first_pid}");
+        let mntns_fd = open(
+            &["/", "proc", &first_pid.to_string(), "ns", "mnt"]
+                .iter()
+                .collect::<PathBuf>(),
+            OFlag::O_RDONLY,
+            Mode::empty(),
+        )?;
+        setns(mntns_fd, CloneFlags::CLONE_NEWNS)?;
+        close(mntns_fd)?;
+    } else {
         unshare(CloneFlags::CLONE_NEWNS)?;
         log::debug!("[pam_isolate] unshare(CLONE_NEWNS) successful.");
-        let namespace_link = readlink("/proc/self/ns/mnt")?;
-        eprintln!("namespace_link = {namespace_link:?}");
-        unlink(&mnt_ns_path).ok();
-        symlinkat(namespace_link.as_os_str(), None, &mnt_ns_path)?;
 
         umount(mount_config.tmp.as_str())?;
         mount(
@@ -95,12 +117,6 @@ fn create_namespaces_exclusive(
                 .as_str(),
             ),
         )?;
-
-        write!(lock_file, "initialized")?;
-    } else {
-        let mntns_fd = open(Path::new(&mnt_ns_path), OFlag::O_RDONLY, Mode::empty())?;
-        setns(mntns_fd, CloneFlags::CLONE_NEWNS)?;
-        close(mntns_fd)?;
     }
     Ok(())
 }
@@ -117,11 +133,12 @@ pub fn create_namespaces(
         .collect();
     std::fs::create_dir_all(&run_path).expect("mkdir {run_path}");
 
-    let mut lock_path = run_path.clone();
+    let mut lock_path = run_path;
     lock_path.push("lockfile");
+
     log::debug!("[pam_isolate] lock file path: {lock_path:?}");
 
-    let mut lock_file = OpenOptions::new()
+    let lock_file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
@@ -129,20 +146,11 @@ pub fn create_namespaces(
     lock_file.lock_exclusive()?;
 
     // We have to make sure to unlock the file afterwards, even in the case of an error!
-    let result = create_namespaces_exclusive(
-        rt,
-        username,
-        uid,
-        gid,
-        mount_config,
-        &mut lock_file,
-        run_path,
-    );
+    let result = create_namespaces_exclusive(rt, username, uid, gid, mount_config);
     let result2 = lock_file.unlock();
 
     if result.is_err() {
         drop(lock_file);
-        unlink(&lock_path)?;
         result
     } else {
         result2.map_err(|err| err.into())
