@@ -1,17 +1,16 @@
 use std::{
-    fmt::Write,
     fs::{File, OpenOptions},
-    io::Read,
+    io::{Read, Write},
     path::{Path, PathBuf},
 };
 
 use fs4::FileExt;
 use nix::{
-    fcntl::{open, OFlag},
+    fcntl::{open, readlink, OFlag},
     mount::{mount, umount, MsFlags},
     sched::{setns, unshare, CloneFlags},
     sys::stat::Mode,
-    unistd::{close, unlink, Gid, Uid},
+    unistd::{close, symlinkat, unlink, Gid, Uid},
 };
 use rtnetlink::{new_connection, NetworkNamespace};
 use tokio::runtime::Runtime;
@@ -75,16 +74,12 @@ fn create_namespaces_exclusive(
     lock_file.read_to_string(&mut lock_data)?;
 
     if lock_data.is_empty() {
-        File::create(&mnt_ns_path)?;
         unshare(CloneFlags::CLONE_NEWNS)?;
         log::debug!("[pam_isolate] unshare(CLONE_NEWNS) successful.");
-        mount(
-            Some("/proc/self/ns/mnt"),
-            &mnt_ns_path,
-            None::<&PathBuf>,
-            MsFlags::MS_BIND,
-            None::<&str>,
-        )?;
+        let namespace_link = readlink("/proc/self/ns/mnt")?;
+        eprintln!("namespace_link = {namespace_link:?}");
+        unlink(&mnt_ns_path).ok();
+        symlinkat(namespace_link.as_os_str(), None, &mnt_ns_path)?;
 
         umount(mount_config.tmp.as_str())?;
         mount(
@@ -101,7 +96,7 @@ fn create_namespaces_exclusive(
             ),
         )?;
 
-        lock_data.write_str("initialized")?;
+        write!(lock_file, "initialized")?;
     } else {
         let mntns_fd = open(Path::new(&mnt_ns_path), OFlag::O_RDONLY, Mode::empty())?;
         setns(mntns_fd, CloneFlags::CLONE_NEWNS)?;
