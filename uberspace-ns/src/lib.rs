@@ -2,15 +2,16 @@ use std::{
     fmt::Write,
     fs::{File, OpenOptions},
     io::Read,
-    os::fd::IntoRawFd,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use fs4::FileExt;
 use nix::{
+    fcntl::{open, OFlag},
     mount::{mount, umount, MsFlags},
     sched::{setns, unshare, CloneFlags},
-    unistd::{Gid, Uid},
+    sys::stat::Mode,
+    unistd::{close, unlink, Gid, Uid},
 };
 use rtnetlink::{new_connection, NetworkNamespace};
 use tokio::runtime::Runtime;
@@ -18,54 +19,41 @@ use tokio::runtime::Runtime;
 mod config;
 pub use config::*;
 
-async fn create_interface(username: &str) -> anyhow::Result<()> {
+async fn create_interface(username: &str, uid: Uid) -> anyhow::Result<()> {
     log::debug!("[pam_isolate] Starting network setup");
-    let (connection, handle, _) = new_connection()?;
-    tokio::spawn(connection);
 
-    match NetworkNamespace::child_process_create_ns(format!("{username}_ns")) {
-        Ok(path) => log::info!("[pam_isolate] Namespace created at {path}"),
-        Err(err) => {
-            if let rtnetlink::Error::NamespaceError(msg) = &err {
-                if msg.contains("EEXIST") {
-                    log::info!("[pam_isolate] Namespace already exists");
-                } else {
-                    return Err(err.into());
-                }
-            } else {
-                return Err(err.into());
-            }
-        }
-    }
+    let netns = format!("{username}_ns");
+    let netns_path = ["/", "run", "netns", &netns].iter().collect::<PathBuf>();
 
-    let mut links = handle
-        .link()
-        .add()
-        .veth("inside0".to_owned(), "outside0".to_owned());
-    links
-        .message_mut()
-        .nlas
-        .push(netlink_packet_route::link::nlas::Nla::NewNetnsId(
-            format!("{username}_ns").as_bytes().to_vec(),
-        ));
+    if netns_path.exists() {
+        let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
+        setns(netns_fd, CloneFlags::CLONE_NEWNET)?;
+        close(netns_fd)?;
 
-    match links.execute().await {
-        Ok(()) => {
+        log::info!("[pam_isolate] Joined existing namespace.");
+        Ok(())
+    } else {
+        let (connection, handle, _) = new_connection()?;
+        tokio::spawn(connection);
+        let netns_path = NetworkNamespace::child_process_create_ns(netns)?;
+        NetworkNamespace::unshare_processing(netns_path.clone())?;
+        log::info!("Created net namespace {netns_path:?}");
+        let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
+
+        let mut links = handle
+            .link()
+            .add()
+            .veth(format!("veth_{uid}_out"), format!("veth_{uid}_in"));
+        links
+            .message_mut()
+            .nlas
+            .push(netlink_packet_route::link::nlas::Nla::NetNsFd(netns_fd));
+        let result = links.execute().await;
+        if result.is_ok() {
             log::info!("[pam_isolate] Link created");
-            Ok(())
         }
-        Err(err) => {
-            if let rtnetlink::Error::NetlinkError(err_msg) = &err {
-                if err_msg.code == -17 {
-                    log::info!("[pam_isolate] Link already exists");
-                    Ok(())
-                } else {
-                    Err(err.into())
-                }
-            } else {
-                Err(err.into())
-            }
-        }
+        close(netns_fd)?;
+        result.map_err(|err| err.into())
     }
 }
 
@@ -78,7 +66,7 @@ fn create_namespaces_exclusive(
     lock_file: &mut File,
     mut mnt_ns_path: PathBuf,
 ) -> anyhow::Result<()> {
-    rt.block_on(create_interface(username))?;
+    rt.block_on(create_interface(username, uid))?;
 
     mnt_ns_path.push("mnt.ns");
     log::debug!("[pam_isolate] mount namespace file path: {mnt_ns_path:?}");
@@ -87,6 +75,7 @@ fn create_namespaces_exclusive(
     lock_file.read_to_string(&mut lock_data)?;
 
     if lock_data.is_empty() {
+        File::create(&mnt_ns_path)?;
         unshare(CloneFlags::CLONE_NEWNS)?;
         log::debug!("[pam_isolate] unshare(CLONE_NEWNS) successful.");
         mount(
@@ -114,8 +103,9 @@ fn create_namespaces_exclusive(
 
         lock_data.write_str("initialized")?;
     } else {
-        let mntns = File::open(mnt_ns_path)?;
-        setns(mntns.into_raw_fd(), CloneFlags::CLONE_NEWNS)?;
+        let mntns_fd = open(Path::new(&mnt_ns_path), OFlag::O_RDONLY, Mode::empty())?;
+        setns(mntns_fd, CloneFlags::CLONE_NEWNS)?;
+        close(mntns_fd)?;
     }
     Ok(())
 }
@@ -136,7 +126,11 @@ pub fn create_namespaces(
     lock_path.push("lockfile");
     log::debug!("[pam_isolate] lock file path: {lock_path:?}");
 
-    let mut lock_file = OpenOptions::new().create(true).open(lock_path)?;
+    let mut lock_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&lock_path)?;
     lock_file.lock_exclusive()?;
 
     // We have to make sure to unlock the file afterwards, even in the case of an error!
@@ -152,6 +146,8 @@ pub fn create_namespaces(
     let result2 = lock_file.unlock();
 
     if result.is_err() {
+        drop(lock_file);
+        unlink(&lock_path)?;
         result
     } else {
         result2.map_err(|err| err.into())
