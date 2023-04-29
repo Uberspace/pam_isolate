@@ -158,6 +158,11 @@ pub fn create_namespaces(
     mount_config: &config::Mount,
     user_env: &str,
 ) -> anyhow::Result<()> {
+    if user_env.contains('=') {
+        return Err(anyhow::anyhow!(
+            "Don't use `=` within the user environment variable name!"
+        ));
+    }
     let run_path: PathBuf = ["/", "var", "run", "user", &uid.to_string(), "pam_isolate"]
         .iter()
         .collect();
