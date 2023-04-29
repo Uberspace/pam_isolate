@@ -1,4 +1,5 @@
 log_level = "Debug"
+user_env = "ISOLATE_UBERSPACE_USER"
 
 [users]
 ignore = ["root"]

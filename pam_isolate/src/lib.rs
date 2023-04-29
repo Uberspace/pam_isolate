@@ -39,7 +39,14 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
         return Ok(());
     };
 
-    create_namespaces(&rt, &username, passwd.uid, passwd.gid, &config.mount)?;
+    create_namespaces(
+        &rt,
+        &username,
+        passwd.uid,
+        passwd.gid,
+        &config.mount,
+        &config.user_env,
+    )?;
 
     log::info!("[pam_isolate] User logged in");
 

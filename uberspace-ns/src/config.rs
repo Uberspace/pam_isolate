@@ -22,6 +22,8 @@ pub struct Config {
     #[serde(default = "default_log_level")]
     pub log_level: LevelFilter,
     pub mount: Mount,
+    #[serde(default = "default_user_env")]
+    pub user_env: String,
 }
 
 impl Default for Config {
@@ -30,12 +32,17 @@ impl Default for Config {
             users: Default::default(),
             log_level: default_log_level(),
             mount: Default::default(),
+            user_env: default_user_env(),
         }
     }
 }
 
 fn default_log_level() -> LevelFilter {
     LevelFilter::Warn
+}
+
+fn default_user_env() -> String {
+    "ISOLATE_UBERSPACE_USER".to_owned()
 }
 
 impl Config {
