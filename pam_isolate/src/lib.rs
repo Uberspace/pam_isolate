@@ -1,6 +1,6 @@
 use core::slice;
 use std::{
-    ffi::{c_char, c_int, CStr, OsStr, OsString},
+    ffi::{c_char, c_int, CStr, CString, OsStr, OsString},
     os::unix::prelude::OsStrExt,
     path::PathBuf,
 };
@@ -17,6 +17,10 @@ struct Args {
     config: PathBuf,
     #[arg(short, long, default_value_t = LevelFilter::Warn)]
     log_level: LevelFilter,
+}
+
+extern "C" {
+    fn pam_putenv(pamh: *const PamHandle, name_value: *const c_char);
 }
 
 fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
@@ -46,6 +50,12 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
         passwd.gid,
         &config.mount,
         &config.user_env,
+        |key, value| {
+            let s = CString::new(format!("{key}={value}")).unwrap();
+            unsafe {
+                pam_putenv(pamh as *const PamHandle, s.as_ptr());
+            }
+        },
     )?;
 
     log::info!("[pam_isolate] User logged in");

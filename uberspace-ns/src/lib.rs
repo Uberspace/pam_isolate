@@ -10,7 +10,7 @@ use nix::{
     mount::{mount, umount, MsFlags},
     sched::{setns, unshare, CloneFlags},
     sys::stat::Mode,
-    unistd::{close, Gid, Pid, Uid},
+    unistd::{close, getpid, Gid, Pid, Uid},
 };
 use rtnetlink::{new_connection, NetworkNamespace};
 use tokio::runtime::Runtime;
@@ -70,9 +70,10 @@ fn get_first_process_by_uid_or_env(uid: Uid, user_env: &str) -> anyhow::Result<O
             if let Ok(pid) = pid_str.parse() {
                 // Check if the process belongs to the specified user
                 if let Ok(status) = nix::sys::stat::stat(entry_path.join("status").as_path()) {
-                    if Uid::from_raw(status.st_uid) == uid {
-                        return Ok(Some(Pid::from_raw(pid)));
-                    } else if status.st_uid == 0 {
+                    if Uid::from_raw(status.st_uid) == uid || status.st_uid == 0 {
+                        //     log::info!("[pam_isolate] Found process by the user {uid} with pid {pid}");
+                        //     return Ok(Some(Pid::from_raw(pid)));
+                        // } else if status.st_uid == 0 {
                         // Alternatively, this process could also be in the process of becoming the specified user.
                         // This is here to avoid a race condition, because in a PAM module we can't unlock our
                         // lockfile after the call to `setuid()`, it has to happen before that.
@@ -92,6 +93,7 @@ fn get_first_process_by_uid_or_env(uid: Uid, user_env: &str) -> anyhow::Result<O
                                     })
                                     .is_some()
                             {
+                                log::info!("[pam_isolate] Found process to be used for the user {uid} with pid {pid}");
                                 return Ok(Some(Pid::from_raw(pid)));
                             }
                             buffer.clear();
@@ -118,7 +120,7 @@ fn create_namespaces_exclusive(
     let first_pid = get_first_process_by_uid_or_env(uid, user_env)?;
 
     if let Some(first_pid) = first_pid {
-        log::info!("Attaching to namespace of pid {first_pid}");
+        log::info!("[pam_isolate] Attaching to namespace of pid {first_pid}");
         let mntns_fd = open(
             &["/", "proc", &first_pid.to_string(), "ns", "mnt"]
                 .iter()
@@ -157,6 +159,7 @@ pub fn create_namespaces(
     gid: Gid,
     mount_config: &config::Mount,
     user_env: &str,
+    set_env: impl Fn(&str, &str),
 ) -> anyhow::Result<()> {
     if user_env.contains('=') {
         return Err(anyhow::anyhow!(
@@ -171,7 +174,10 @@ pub fn create_namespaces(
     let mut lock_path = run_path;
     lock_path.push("lockfile");
 
-    log::debug!("[pam_isolate] lock file path: {lock_path:?}");
+    log::debug!(
+        "[pam_isolate] lock file path: {lock_path:?} pid {}",
+        getpid()
+    );
 
     let lock_file = OpenOptions::new()
         .read(true)
@@ -179,7 +185,12 @@ pub fn create_namespaces(
         .create(true)
         .open(&lock_path)?;
     lock_file.lock_exclusive()?;
-    std::env::set_var(user_env, uid.to_string());
+    // TODO: use pam_putenv
+    set_env(user_env, &uid.to_string());
+    log::debug!("[pam_isolate] set {user_env}={}", uid.to_string());
+    for (var, content) in std::env::vars() {
+        log::debug!("[pam_isolate] var {var} = {content}");
+    }
 
     // We have to make sure to unlock the file afterwards, even in the case of an error!
     let result = create_namespaces_exclusive(rt, username, uid, gid, mount_config, user_env);

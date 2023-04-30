@@ -38,7 +38,17 @@ fn main() -> anyhow::Result<()> {
 
     setuid(euid)?;
     setgid(egid)?;
-    create_namespaces(&rt, &passwd.name, uid, gid, &config.mount, &config.user_env)?;
+    create_namespaces(
+        &rt,
+        &passwd.name,
+        uid,
+        gid,
+        &config.mount,
+        &config.user_env,
+        |key, value| {
+            std::env::set_var(key, value);
+        },
+    )?;
     setgid(gid)?;
     setuid(uid)?;
 
