@@ -55,6 +55,7 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
             unsafe {
                 pam_putenv(pamh as *const PamHandle, s.as_ptr());
             }
+            std::env::set_var(key, value);
         },
     )?;
 
