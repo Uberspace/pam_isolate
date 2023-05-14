@@ -185,7 +185,6 @@ pub fn create_namespaces(
         .create(true)
         .open(&lock_path)?;
     lock_file.lock_exclusive()?;
-    // TODO: use pam_putenv
     set_env(user_env, &uid.to_string());
     log::debug!("[pam_isolate] set {user_env}={}", uid.to_string());
     for (var, content) in std::env::vars() {
