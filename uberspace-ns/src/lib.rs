@@ -70,13 +70,13 @@ fn get_first_process_by_uid_or_env(uid: Uid, user_env: &str) -> anyhow::Result<O
             if let Ok(pid) = pid_str.parse() {
                 // Check if the process belongs to the specified user
                 if let Ok(status) = nix::sys::stat::stat(entry_path.join("status").as_path()) {
-                    if Uid::from_raw(status.st_uid) == uid || status.st_uid == 0 {
-                        //     log::info!("[pam_isolate] Found process by the user {uid} with pid {pid}");
-                        //     return Ok(Some(Pid::from_raw(pid)));
-                        // } else if status.st_uid == 0 {
-                        // Alternatively, this process could also be in the process of becoming the specified user.
-                        // This is here to avoid a race condition, because in a PAM module we can't unlock our
-                        // lockfile after the call to `setuid()`, it has to happen before that.
+                    if Uid::from_raw(status.st_uid) == uid {
+                        return Ok(Some(Pid::from_raw(pid)));
+                    }
+                    // Alternatively, this process could also be in the process of becoming the specified user.
+                    // This is here to avoid a race condition, because in a PAM module we can't unlock our
+                    // lockfile after the call to `setuid()`, it has to happen before that.
+                    if status.st_uid == 0 {
                         let mut environ_path = entry_path.clone();
                         environ_path.push("environ");
                         let mut environ = BufReader::new(std::fs::File::open(environ_path)?);
