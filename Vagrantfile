@@ -3,7 +3,7 @@ Vagrant.configure("2") do |config|
     config.vm.provision "shell", inline: <<-SHELL
         mount --make-private /
         cp -r /home/vagrant/.ssh /root
-        cp /vagrant/pam_isolate/config.toml /etc/pam_isolate.toml
+        cp /vagrant/config.toml /etc/pam_isolate.toml
         cp /vagrant/target/debug/libpam_isolate.so /lib64/security/pam_isolate.so
         cp /vagrant/target/debug/wrapns /usr/local/bin/
         chmod +s /usr/local/bin/wrapns
