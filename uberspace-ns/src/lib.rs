@@ -166,13 +166,11 @@ pub fn create_namespaces(
             "Don't use `=` within the user environment variable name!"
         ));
     }
-    let run_path: PathBuf = ["/", "var", "run", "user", &uid.to_string(), "pam_isolate"]
-        .iter()
-        .collect();
+    let run_path: PathBuf = ["/", "var", "run", "pam_isolate"].iter().collect();
     std::fs::create_dir_all(&run_path).expect("mkdir {run_path}");
 
     let mut lock_path = run_path;
-    lock_path.push("lockfile");
+    lock_path.push(format!("lock_{uid}"));
 
     log::debug!(
         "[pam_isolate] lock file path: {lock_path:?} pid {}",
