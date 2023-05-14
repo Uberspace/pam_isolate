@@ -1,0 +1,10 @@
+[Unit]
+Description=Testing the wrapns command
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/wrapns /bin/bash -c "ip a > /tmp/wrapns-net.txt"
+User=vagrant
+
+[Install]
+WantedBy=multi-user.target

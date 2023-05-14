@@ -1,0 +1,6 @@
+[vagrant:session1@remote]$_ ip a show dev veth_1000_in
+[vagrant:session1@remote]$_ ! ip a show dev veth_1000_out
+[root@remote]$_ ip a show dev veth_1000_out
+[root@remote]$_ ! ip a show dev veth_1000_in
+[vagrant:session2@remote]$_ ip a show dev veth_1000_in
+[vagrant:session2@remote]$_ ! ip a show dev veth_1000_out

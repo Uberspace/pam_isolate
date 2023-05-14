@@ -1,0 +1,6 @@
+[vagrant:session1@remote]$ ip netns
+vagrant_ns
+[vagrant:session2@remote]$ ip netns
+vagrant_ns
+[root@remote]$~ ip netns list
+.*vagrant_ns \(id: [0-9]+\).*

@@ -1,0 +1,8 @@
+[vagrant:session1@remote]$ echo "hello" > /tmp/hello.txt
+[vagrant:session1@remote]$ cat /tmp/hello.txt
+hello
+[root@remote]$ ! test -f /tmp/hello.txt
+[vagrant:session2@remote]$ cat /tmp/hello.txt
+hello
+[vagrant:session2@remote]$ rm /tmp/hello.txt
+[vagrant:session1@remote]$ ! test -f /tmp/hello.txt

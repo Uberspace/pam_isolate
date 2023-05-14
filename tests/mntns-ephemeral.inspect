@@ -1,4 +1,6 @@
 [vagrant@remote]$ echo "hello" > /tmp/hello.txt
 [vagrant@remote]$ cat /tmp/hello.txt
 hello
-[root@remote]$ ! test -f /tmp/hello.txt
+[vagrant@remote]$ exit
+exit
+[vagrant@remote]$ ! test -f /tmp/hello.txt

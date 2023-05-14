@@ -1,0 +1,8 @@
+[root@remote]$ cp /vagrant/tests/test-wrapns-netns.service /etc/systemd/system/
+[root@remote]$ systemctl daemon-reload
+[vagrant@remote]$ ! test -f /tmp/wrapns-net.txt
+[root@remote]$ systemctl start test-wrapns-netns
+[vagrant@remote]$ ip a | cmp --silent /tmp/wrapns-net.txt -
+[vagrant@remote]$ rm /tmp/wrapns-net.txt
+[root@remote]$ rm /etc/systemd/system/test-wrapns-netns.service
+[root@remote]$ systemctl daemon-reload

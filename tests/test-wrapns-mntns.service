@@ -1,0 +1,10 @@
+[Unit]
+Description=Testing the wrapns command
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/wrapns /usr/bin/touch /tmp/hello-wrapns
+User=vagrant
+
+[Install]
+WantedBy=multi-user.target

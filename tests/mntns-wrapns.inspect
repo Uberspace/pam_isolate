@@ -1,0 +1,8 @@
+[root@remote]$ cp /vagrant/tests/test-wrapns-mntns.service /etc/systemd/system/
+[root@remote]$ systemctl daemon-reload
+[vagrant@remote]$ ! test -f /tmp/hello-wrapns
+[root@remote]$ systemctl start test-wrapns-mntns
+[vagrant@remote]$ test -f /tmp/hello-wrapns
+[vagrant@remote]$ rm /tmp/hello-wrapns
+[root@remote]$ rm /etc/systemd/system/test-wrapns-mntns.service
+[root@remote]$ systemctl daemon-reload
