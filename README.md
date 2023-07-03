@@ -17,3 +17,8 @@ Password:
 Hello World!
 [vagrant@archlinux ~]$
 ```
+
+## Tests
+
+1. install [shellinspector](https://github.com/Uberspace/shellinspector)
+2. `make test`
