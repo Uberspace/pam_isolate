@@ -9,3 +9,7 @@ release:
 .PHONY: clean
 clean:
 	cargo clean
+
+.PHONY: vm
+vm:
+	vagrant up
