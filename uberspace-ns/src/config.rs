@@ -42,7 +42,7 @@ fn default_log_level() -> LevelFilter {
 }
 
 fn default_user_env() -> String {
-    "ISOLATE_UBERSPACE_USER".to_owned()
+    "PAM_NETNS_USER".to_owned()
 }
 
 impl Config {

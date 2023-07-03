@@ -1,5 +1,5 @@
 log_level = "Debug"
-user_env = "ISOLATE_UBERSPACE_USER"
+user_env = "PAM_NETNS_USER"
 
 [users]
 ignore = ["root"]
