@@ -9,7 +9,7 @@ use clap::Parser;
 use log::LevelFilter;
 use nix::unistd::User;
 use pam::{constants::PamResultCode, module::PamHandle};
-use uberspace_ns::{create_namespaces, Config};
+use lib_pam_isolate::{create_namespaces, Config};
 
 #[derive(Parser, Debug)]
 struct Args {

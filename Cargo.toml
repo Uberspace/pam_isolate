@@ -1,2 +1,2 @@
 [workspace]
-members = ["pam_isolate", "uberspace-ns", "wrapns"]
+members = ["pam_isolate", "lib-pam-isolate", "wrapns"]

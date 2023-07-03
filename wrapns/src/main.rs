@@ -3,7 +3,7 @@ use std::{ffi::CString, os::unix::prelude::OsStrExt};
 use anyhow::anyhow;
 use log::LevelFilter;
 use nix::unistd::{execv, getegid, geteuid, getgid, getuid, setgid, setuid, User};
-use uberspace_ns::{create_namespaces, Config};
+use lib_pam_isolate::{create_namespaces, Config};
 
 fn main() -> anyhow::Result<()> {
     systemd_journal_logger::init_with_extra_fields(vec![("OBJECT_EXE", "wrapns")]).unwrap();

@@ -1,5 +1,5 @@
 [package]
-name = "uberspace-ns"
+name = "lib-pam-isolate"
 version = "0.1.0"
 edition = "2021"
 

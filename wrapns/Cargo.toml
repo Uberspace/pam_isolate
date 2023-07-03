@@ -9,5 +9,5 @@ log = { version = "0.4.17", features = ["serde"] }
 tokio = { version = "1.26.0", features = ["rt"] }
 systemd-journal-logger = "0.7.0"
 serde = { version = "1.0.156", features = ["derive"] }
-uberspace-ns = { path = "../uberspace-ns" }
+lib-pam-isolate = { path = "../lib-pam-isolate" }
 nix = { version = "0.26.2", default-features = false, features = ["user", "process"] }

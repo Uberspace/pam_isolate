@@ -15,5 +15,5 @@ systemd-journal-logger = "0.7.0"
 pam-bindings = "0.1.1"
 serde = { version = "1.0.156", features = ["derive"] }
 tokio = { version = "1.26.0", features = ["rt"] }
-uberspace-ns = { path = "../uberspace-ns" }
+lib-pam-isolate = { path = "../lib-pam-isolate" }
 nix = { version = "0.26.2", default-features = false, features = ["user"] }
