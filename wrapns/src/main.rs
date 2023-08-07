@@ -45,6 +45,7 @@ fn main() -> anyhow::Result<()> {
         gid,
         &config.mount,
         &config.user_env,
+        &config.net.loopback,
         |key, value| {
             std::env::set_var(key, value);
         },

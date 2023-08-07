@@ -18,6 +18,11 @@ pub struct Mount {
     pub size: String,
 }
 
+#[derive(Debug, Default, Deserialize)]
+pub struct Net {
+    pub loopback: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
@@ -27,6 +32,7 @@ pub struct Config {
     pub mount: Mount,
     #[serde(default = "default_user_env")]
     pub user_env: String,
+    pub net: Net,
     #[serde(default)]
     pub sysctl: HashMap<String, toml::Value>,
 }
@@ -38,6 +44,9 @@ impl Default for Config {
             log_level: default_log_level(),
             mount: Default::default(),
             user_env: default_user_env(),
+            net: Net {
+                loopback: "lo".to_owned(),
+            },
             sysctl: HashMap::default(),
         }
     }

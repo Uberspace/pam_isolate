@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 use std::{
     collections::HashMap,
     ffi::OsStr,
@@ -8,6 +9,7 @@ use std::{
 };
 
 use fs4::FileExt;
+use futures::stream::TryStreamExt;
 use nix::{
     fcntl::{open, OFlag},
     mount::{mount, umount, MsFlags},
@@ -22,7 +24,7 @@ use tokio::runtime::Runtime;
 mod config;
 pub use config::*;
 
-async fn create_interface(username: &str, uid: Uid) -> anyhow::Result<()> {
+async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::Result<()> {
     log::debug!("[pam_isolate] Starting network setup");
 
     let netns = format!("{username}_ns");
@@ -40,9 +42,21 @@ async fn create_interface(username: &str, uid: Uid) -> anyhow::Result<()> {
         tokio::spawn(connection);
         let netns_path = NetworkNamespace::child_process_create_ns(netns)?;
         NetworkNamespace::unshare_processing(netns_path.clone())?;
-        log::info!("Created net namespace {netns_path:?}");
-        let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
+        log::info!("[pam_isolate] Created net namespace {netns_path:?}");
 
+        let mut links = handle
+            .link()
+            .get()
+            .match_name(loopback.to_owned())
+            .execute();
+
+        while let Ok(Some(link)) = links.try_next().await {
+            let index = link.header.index;
+            handle.link().set(index).up().execute().await?;
+            log::info!("[pam_isolate] Found loopback at index {index}, set up.");
+        }
+
+        let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
         let mut links = handle
             .link()
             .add()
@@ -122,8 +136,9 @@ fn create_namespaces_exclusive(
     gid: Gid,
     mount_config: &config::Mount,
     user_env: &str,
+    loopback: &str,
 ) -> anyhow::Result<()> {
-    rt.block_on(create_interface(username, uid))?;
+    rt.block_on(create_interface(username, uid, loopback))?;
 
     let first_pid = get_first_process_by_uid_or_env(uid, user_env)?;
 
@@ -167,6 +182,7 @@ pub fn create_namespaces(
     gid: Gid,
     mount_config: &config::Mount,
     user_env: &str,
+    loopback: &str,
     set_env: impl Fn(&str, &str),
 ) -> anyhow::Result<()> {
     if user_env.contains('=') {
@@ -198,7 +214,8 @@ pub fn create_namespaces(
     }
 
     // We have to make sure to unlock the file afterwards, even in the case of an error!
-    let result = create_namespaces_exclusive(rt, username, uid, gid, mount_config, user_env);
+    let result =
+        create_namespaces_exclusive(rt, username, uid, gid, mount_config, user_env, loopback);
     let result2 = lock_file.unlock();
 
     if result.is_err() {

@@ -50,6 +50,7 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
         passwd.gid,
         &config.mount,
         &config.user_env,
+        &config.net.loopback,
         |key, value| {
             let s = CString::new(format!("{key}={value}")).unwrap();
             unsafe {
