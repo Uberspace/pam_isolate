@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     ffi::OsStr,
     fs::{read_dir, OpenOptions},
     io::{BufRead, BufReader},
@@ -15,6 +16,7 @@ use nix::{
     unistd::{close, getpid, Gid, Pid, Uid},
 };
 use rtnetlink::{new_connection, NetworkNamespace};
+use sysctl::{Ctl, CtlValue, Sysctl};
 use tokio::runtime::Runtime;
 
 mod config;
@@ -204,5 +206,74 @@ pub fn create_namespaces(
         result
     } else {
         result2.map_err(|err| err.into())
+    }
+}
+
+pub fn try_setup_sysctl(table: &HashMap<String, toml::Value>) {
+    for (key, value) in table {
+        let value = match value {
+            toml::Value::String(value) => CtlValue::String(value.clone()),
+            toml::Value::Integer(value) => CtlValue::S64(*value),
+            toml::Value::Table(value) => {
+                if let Some(ty) = value.get("type").and_then(|ty| ty.as_str()) {
+                    match ty {
+                        "uint" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::Uint(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "ulong" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::Ulong(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "u8" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::U8(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "u16" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::U16(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "u32" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::U32(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "u64" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::U64(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "int" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::Int(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "long" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::Long(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "s8" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::S8(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "s16" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::S16(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "s32" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::S32(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        "s64" if matches!(value.get("value"), Some(toml::Value::Integer(_))) => {
+                            CtlValue::S64(value.get("value").unwrap().as_integer().unwrap() as _)
+                        }
+                        _ => {
+                            log::error!(
+                                "[pam_isolate] Unknown type {ty:?} for typed sysctl entry \"{key}\""
+                            );
+                            continue;
+                        }
+                    }
+                } else {
+                    log::error!("[pam_isolate] Invalid format for typed sysctl entry \"{key}\"");
+                    continue;
+                }
+            }
+            _ => {
+                log::error!(
+                    "[pam_isolate] Unhandled sysctl value type {value:?} for entry \"{key}\""
+                );
+                continue;
+            }
+        };
+        if let Err(err) = Ctl::new(key).and_then(|ctl| ctl.set_value(value)) {
+            log::error!("[pam_isolate] Failed setting sysctl \"{key}\": {err}");
+        }
     }
 }

@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use log::LevelFilter;
 use serde::Deserialize;
@@ -24,6 +27,8 @@ pub struct Config {
     pub mount: Mount,
     #[serde(default = "default_user_env")]
     pub user_env: String,
+    #[serde(default)]
+    pub sysctl: HashMap<String, toml::Value>,
 }
 
 impl Default for Config {
@@ -33,6 +38,7 @@ impl Default for Config {
             log_level: default_log_level(),
             mount: Default::default(),
             user_env: default_user_env(),
+            sysctl: HashMap::default(),
         }
     }
 }

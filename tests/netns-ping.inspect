@@ -1,0 +1,2 @@
+[vagrant@remote]$ ping -c1 0.0.0.0
+1 packets transmitted

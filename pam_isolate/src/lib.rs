@@ -6,10 +6,10 @@ use std::{
 };
 
 use clap::Parser;
+use lib_pam_isolate::{create_namespaces, try_setup_sysctl, Config};
 use log::LevelFilter;
 use nix::unistd::User;
 use pam::{constants::PamResultCode, module::PamHandle};
-use lib_pam_isolate::{create_namespaces, Config};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -58,6 +58,10 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
             std::env::set_var(key, value);
         },
     )?;
+
+    if !config.sysctl.is_empty() {
+        try_setup_sysctl(&config.sysctl);
+    }
 
     log::info!("[pam_isolate] User logged in");
 
