@@ -4,6 +4,7 @@ use std::{
     ffi::OsStr,
     fs::{read_dir, OpenOptions},
     io::{BufRead, BufReader},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     os::unix::prelude::OsStrExt,
     path::{Path, PathBuf},
 };
@@ -23,6 +24,41 @@ use tokio::runtime::Runtime;
 
 mod config;
 pub use config::*;
+
+struct AddressPair {
+    v4: Ipv4Addr,
+    v4_prefix_len: u8,
+    v6: Ipv6Addr,
+    v6_prefix_len: u8,
+}
+
+fn generate_veth_addresses() -> (AddressPair, AddressPair) {
+    (
+        AddressPair {
+            v4: Ipv4Addr::new(100, 64, 255, 1),
+            v4_prefix_len: 24,
+            v6: Ipv6Addr::new(0xfd75, 0x6272, 0x7370, 0xffff, 0, 0, 0, 0x0001),
+            v6_prefix_len: 64,
+        },
+        AddressPair {
+            v4: Ipv4Addr::new(100, 64, 255, 2),
+            v4_prefix_len: 24,
+            v6: Ipv6Addr::new(0xfd75, 0x6272, 0x7370, 0xffff, 0, 0, 0, 0x0002),
+            v6_prefix_len: 64,
+        },
+    )
+}
+
+async fn get_link_index(handle: &rtnetlink::Handle, name: &str) -> anyhow::Result<Option<u32>> {
+    let mut links = handle.link().get().match_name(name.to_owned()).execute();
+
+    if let Some(link) = links.try_next().await? {
+        links.collect::<Vec<_>>().await; // drain stream
+        Ok(Some(link.header.index))
+    } else {
+        Ok(None)
+    }
+}
 
 async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::Result<()> {
     log::debug!("[pam_isolate] Starting network setup");
@@ -44,38 +80,54 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
         NetworkNamespace::unshare_processing(netns_path.clone())?;
         log::info!("[pam_isolate] Created net namespace {netns_path:?}");
 
+        let out_name = format!("veth_{uid}_out");
+        let in_name = format!("veth_{uid}_in");
+
         let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
-        let mut links = handle
-            .link()
-            .add()
-            .veth(format!("veth_{uid}_out"), format!("veth_{uid}_in"));
+        let mut links = handle.link().add().veth(out_name.clone(), in_name.clone());
         links
             .message_mut()
             .nlas
             .push(netlink_packet_route::link::nlas::Nla::NetNsFd(netns_fd));
         let result = links.execute().await;
         close(netns_fd)?;
-
         result?;
-
         log::info!("[pam_isolate] Link created");
+
+        let (out_addr, in_addr) = generate_veth_addresses();
+        if let Some(out_index) = get_link_index(&handle, &out_name).await? {
+            handle
+                .address()
+                .add(out_index, IpAddr::V4(out_addr.v4), out_addr.v4_prefix_len)
+                .execute()
+                .await?;
+            handle
+                .address()
+                .add(out_index, IpAddr::V6(out_addr.v6), out_addr.v6_prefix_len)
+                .execute()
+                .await?;
+        }
 
         // We need to set up a new connection here in order to move to the new namespace for this operation.
         let (connection, handle, _) = new_connection()?;
         tokio::spawn(connection);
 
-        let mut links = handle
-            .link()
-            .get()
-            .match_name(loopback.to_owned())
-            .execute();
+        if let Some(lo_index) = get_link_index(&handle, loopback).await? {
+            handle.link().set(lo_index).up().execute().await?;
+            log::info!("[pam_isolate] Found loopback at index {lo_index}, set up");
+        }
 
-        if let Some(link) = links.try_next().await? {
-            links.collect::<Vec<_>>().await; // drain stream
-
-            let index = link.header.index;
-            handle.link().set(index).up().execute().await?;
-            log::info!("[pam_isolate] Found loopback at index {index}, set up");
+        if let Some(in_index) = get_link_index(&handle, &in_name).await? {
+            handle
+                .address()
+                .add(in_index, IpAddr::V4(in_addr.v4), in_addr.v4_prefix_len)
+                .execute()
+                .await?;
+            handle
+                .address()
+                .add(in_index, IpAddr::V6(in_addr.v6), in_addr.v6_prefix_len)
+                .execute()
+                .await?;
         }
 
         Ok(())
