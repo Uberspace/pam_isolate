@@ -32,7 +32,8 @@ struct AddressPair {
     v6_prefix_len: u8,
 }
 
-fn generate_veth_addresses() -> (AddressPair, AddressPair) {
+// TODO: pass UID as parameter here (ignored for now)
+fn generate_veth_addresses(_uid: Uid) -> (AddressPair, AddressPair) {
     (
         AddressPair {
             v4: Ipv4Addr::new(100, 64, 255, 1),
@@ -94,7 +95,7 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
         result?;
         log::info!("[pam_isolate] Link created");
 
-        let (out_addr, in_addr) = generate_veth_addresses();
+        let (out_addr, in_addr) = generate_veth_addresses(uid);
         if let Some(out_index) = get_link_index(&handle, &out_name).await? {
             handle
                 .address()
