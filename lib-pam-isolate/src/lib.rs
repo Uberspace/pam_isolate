@@ -9,7 +9,7 @@ use std::{
 };
 
 use fs4::FileExt;
-use futures::stream::TryStreamExt;
+use futures::{stream::TryStreamExt, StreamExt};
 use nix::{
     fcntl::{open, OFlag},
     mount::{mount, umount, MsFlags},
@@ -44,18 +44,6 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
         NetworkNamespace::unshare_processing(netns_path.clone())?;
         log::info!("[pam_isolate] Created net namespace {netns_path:?}");
 
-        let mut links = handle
-            .link()
-            .get()
-            .match_name(loopback.to_owned())
-            .execute();
-
-        while let Ok(Some(link)) = links.try_next().await {
-            let index = link.header.index;
-            handle.link().set(index).up().execute().await?;
-            log::info!("[pam_isolate] Found loopback at index {index}, set up.");
-        }
-
         let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
         let mut links = handle
             .link()
@@ -66,11 +54,31 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
             .nlas
             .push(netlink_packet_route::link::nlas::Nla::NetNsFd(netns_fd));
         let result = links.execute().await;
-        if result.is_ok() {
-            log::info!("[pam_isolate] Link created");
-        }
         close(netns_fd)?;
-        result.map_err(|err| err.into())
+
+        result?;
+
+        log::info!("[pam_isolate] Link created");
+
+        // We need to set up a new connection here in order to move to the new namespace for this operation.
+        let (connection, handle, _) = new_connection()?;
+        tokio::spawn(connection);
+
+        let mut links = handle
+            .link()
+            .get()
+            .match_name(loopback.to_owned())
+            .execute();
+
+        if let Some(link) = links.try_next().await? {
+            links.collect::<Vec<_>>().await; // drain stream
+
+            let index = link.header.index;
+            handle.link().set(index).up().execute().await?;
+            log::info!("[pam_isolate] Found loopback at index {index}, set up");
+        }
+
+        Ok(())
     }
 }
 
