@@ -1,0 +1,2 @@
+[vagrant@remote]$ ip a | grep fd75:
+    inet6 fd75:6272:7370:ffff::2/64 scope global tentative
