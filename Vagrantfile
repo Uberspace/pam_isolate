@@ -1,6 +1,10 @@
 Vagrant.configure("2") do |config|
     config.vm.box = "archlinux/archlinux"
     config.vm.synced_folder ".", "/vagrant", type: "rsync", rsync__exclude: ".git/"
+    config.vm.provider :libvirt do |libvirt|
+        # Enable forwarding of forwarded_port with id 'ssh'.
+        libvirt.forward_ssh_port = true
+    end
     config.vm.provision "shell", inline: <<-SHELL
         mount --make-private /
         cp -r /home/vagrant/.ssh /root
