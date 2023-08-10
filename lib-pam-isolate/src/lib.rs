@@ -107,6 +107,7 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
                 .add(out_index, IpAddr::V6(out_addr.v6), out_addr.v6_prefix_len)
                 .execute()
                 .await?;
+            handle.link().set(out_index).up().execute().await?;
         }
 
         // We need to set up a new connection here in order to move to the new namespace for this operation.
