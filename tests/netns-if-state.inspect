@@ -1,0 +1,2 @@
+[vagrant@remote]$~ ip link | grep veth_1000_in
+state UP
