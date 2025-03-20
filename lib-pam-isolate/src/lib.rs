@@ -278,7 +278,7 @@ pub fn create_namespaces(
     // We have to make sure to unlock the file afterwards, even in the case of an error!
     let result =
         create_namespaces_exclusive(rt, username, uid, gid, mount_config, user_env, loopback);
-    let result2 = lock_file.unlock();
+    let result2 = fs4::FileExt::unlock(&lock_file);
 
     if result.is_err() {
         drop(lock_file);
