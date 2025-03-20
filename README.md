@@ -5,9 +5,9 @@ This makes it easy to restrict resource usage, monitor resource usage, and
 prevent crosstalk between users.
 
 1. [Install rustc](https://www.rust-lang.org/tools/install)
-2. [Install Vagrant](https://developer.hashicorp.com/vagrant/downloads)
-3. run `make`
-4. run `make vm`
+1. [Install Vagrant](https://developer.hashicorp.com/vagrant/downloads)
+1. run `make`
+1. run `make vm`
 
 Log into the box using `vagrant ssh` and log into any user:
 
@@ -21,4 +21,4 @@ Hello World!
 ## Tests
 
 1. install [shellinspector](https://github.com/Uberspace/shellinspector)
-2. `make test`
+1. `make test`
