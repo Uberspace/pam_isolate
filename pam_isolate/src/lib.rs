@@ -1,6 +1,7 @@
 use core::slice;
 use std::{
     ffi::{c_char, c_int, CStr, CString, OsStr, OsString},
+    os::unix::net::UnixStream,
     os::unix::prelude::OsStrExt,
     path::PathBuf,
 };
@@ -89,7 +90,12 @@ pub unsafe extern "C" fn pam_sm_open_session(
 
     let args = Args::parse_from(args);
 
-    systemd_journal_logger::init_with_extra_fields(vec![("OBJECT_EXE", "pam_isolate.so")]).unwrap();
+    if UnixStream::connect("/run/systemd/journal/socket").is_ok() {
+        systemd_journal_logger::init_with_extra_fields(vec![("OBJECT_EXE", "pam_isolate.so")])
+            .unwrap();
+    } else {
+        env_logger::builder().filter_level(LevelFilter::Warn).init();
+    }
     log::set_max_level(args.log_level);
 
     match open_session(args, &*pamh) {
