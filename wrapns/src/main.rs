@@ -1,4 +1,4 @@
-use std::{ffi::CString, os::unix::net::UnixStream, os::unix::prelude::OsStrExt};
+use std::{ffi::CString, os::unix::prelude::OsStrExt};
 
 use anyhow::anyhow;
 use lib_pam_isolate::{create_namespaces, try_setup_sysctl, Config};
@@ -6,12 +6,7 @@ use log::LevelFilter;
 use nix::unistd::{execv, getegid, geteuid, getgid, getuid, setgid, setuid, User};
 
 fn main() -> anyhow::Result<()> {
-    if UnixStream::connect("/run/systemd/journal/socket").is_ok() {
-        systemd_journal_logger::init_with_extra_fields(vec![("OBJECT_EXE", "wrapns")]).unwrap();
-    } else {
-        env_logger::builder().filter_level(LevelFilter::Warn).init();
-    }
-
+    systemd_journal_logger::init_with_extra_fields(vec![("OBJECT_EXE", "wrapns")]).unwrap();
     log::set_max_level(LevelFilter::Warn);
 
     let args: Vec<_> = std::env::args_os().collect();
