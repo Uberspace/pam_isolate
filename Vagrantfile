@@ -1,5 +1,5 @@
 Vagrant.configure("2") do |config|
-    config.vm.box = "archlinux/archlinux"
+    config.vm.box = "boxen/archlinux-rolling"
     config.vm.synced_folder ".", "/vagrant", type: "rsync", rsync__exclude: ".git/"
     config.vm.provider :libvirt do |libvirt|
         # Enable forwarding of forwarded_port with id 'ssh'.
