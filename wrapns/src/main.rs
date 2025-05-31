@@ -1,12 +1,17 @@
 use std::{ffi::CString, os::unix::prelude::OsStrExt};
 
 use anyhow::anyhow;
-use lib_pam_isolate::{create_namespaces, try_setup_sysctl, Config};
+use lib_pam_isolate::{Config, create_namespaces, try_setup_sysctl};
 use log::LevelFilter;
-use nix::unistd::{execv, getegid, geteuid, getgid, getuid, setgid, setuid, User};
+use nix::unistd::{User, execv, getegid, geteuid, getgid, getuid, setgid, setuid};
+use systemd_journal_logger::JournalLog;
 
 fn main() -> anyhow::Result<()> {
-    systemd_journal_logger::init_with_extra_fields(vec![("OBJECT_EXE", "wrapns")]).unwrap();
+    JournalLog::new()
+        .unwrap()
+        .with_extra_fields(vec![("OBJECT_EXE", "wrapns")])
+        .install()
+        .unwrap();
     log::set_max_level(LevelFilter::Warn);
 
     let args: Vec<_> = std::env::args_os().collect();
@@ -46,7 +51,7 @@ fn main() -> anyhow::Result<()> {
         &config.mount,
         &config.user_env,
         &config.net.loopback,
-        |key, value| {
+        |key, value| unsafe {
             std::env::set_var(key, value);
         },
     )?;
