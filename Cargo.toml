@@ -1,2 +1,3 @@
 [workspace]
 members = ["pam_isolate", "lib-pam-isolate", "wrapns"]
+resolver = "2"

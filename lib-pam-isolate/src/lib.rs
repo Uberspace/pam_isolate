@@ -2,23 +2,26 @@
 use std::{
     collections::HashMap,
     ffi::OsStr,
-    fs::{read_dir, OpenOptions},
+    fs::{OpenOptions, read_dir},
     io::{BufRead, BufReader},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    os::unix::prelude::OsStrExt,
+    os::{fd::AsRawFd, unix::prelude::OsStrExt},
     path::{Path, PathBuf},
 };
 
-use fs4::FileExt;
-use futures::{stream::TryStreamExt, StreamExt};
+use fs4::fs_std::FileExt;
+use futures::{StreamExt, stream::TryStreamExt};
 use nix::{
-    fcntl::{open, OFlag},
-    mount::{mount, umount, MsFlags},
-    sched::{setns, unshare, CloneFlags},
+    fcntl::{OFlag, open},
+    mount::{MsFlags, mount, umount},
+    sched::{CloneFlags, setns, unshare},
     sys::stat::Mode,
-    unistd::{close, getpid, Gid, Pid, Uid},
+    unistd::{Gid, Pid, Uid, close, getpid},
 };
-use rtnetlink::{new_connection, NetworkNamespace};
+use rtnetlink::{
+    LinkMessageBuilder, LinkUnspec, LinkVeth, NetworkNamespace, new_connection,
+    packet_route::link::LinkAttribute,
+};
 use sysctl::{Ctl, CtlValue, Sysctl};
 use tokio::runtime::Runtime;
 
@@ -70,7 +73,6 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
     if netns_path.exists() {
         let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
         setns(netns_fd, CloneFlags::CLONE_NEWNET)?;
-        close(netns_fd)?;
 
         log::info!("[pam_isolate] Joined existing namespace.");
         Ok(())
@@ -85,11 +87,11 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
         let in_name = format!("veth_{uid}_in");
 
         let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
-        let mut links = handle.link().add().veth(out_name.clone(), in_name.clone());
-        links
-            .message_mut()
-            .nlas
-            .push(netlink_packet_route::link::nlas::Nla::NetNsFd(netns_fd));
+        let links = handle.link().add(
+            LinkVeth::new(&out_name, &in_name)
+                .append_extra_attribute(LinkAttribute::NetNsFd(netns_fd.as_raw_fd()))
+                .build(),
+        );
         let result = links.execute().await;
         close(netns_fd)?;
         result?;
@@ -107,7 +109,16 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
                 .add(out_index, IpAddr::V6(out_addr.v6), out_addr.v6_prefix_len)
                 .execute()
                 .await?;
-            handle.link().set(out_index).up().execute().await?;
+            handle
+                .link()
+                .set(
+                    LinkMessageBuilder::<LinkUnspec>::default()
+                        .index(out_index)
+                        .up()
+                        .build(),
+                )
+                .execute()
+                .await?;
         }
 
         // We need to set up a new connection here in order to move to the new namespace for this operation.
@@ -115,7 +126,16 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
         tokio::spawn(connection);
 
         if let Some(lo_index) = get_link_index(&handle, loopback).await? {
-            handle.link().set(lo_index).up().execute().await?;
+            handle
+                .link()
+                .set(
+                    LinkMessageBuilder::<LinkUnspec>::default()
+                        .index(lo_index)
+                        .up()
+                        .build(),
+                )
+                .execute()
+                .await?;
             log::info!("[pam_isolate] Found loopback at index {lo_index}, set up");
         }
 
@@ -177,7 +197,9 @@ fn get_first_process_by_uid_or_env(uid: Uid, user_env: &str) -> anyhow::Result<O
                                     })
                                     .is_some()
                             {
-                                log::info!("[pam_isolate] Found process to be used for the user {uid} with pid {pid}");
+                                log::info!(
+                                    "[pam_isolate] Found process to be used for the user {uid} with pid {pid}"
+                                );
                                 return Ok(Some(Pid::from_raw(pid)));
                             }
                             buffer.clear();
@@ -214,7 +236,6 @@ fn create_namespaces_exclusive(
             Mode::empty(),
         )?;
         setns(mntns_fd, CloneFlags::CLONE_NEWNS)?;
-        close(mntns_fd)?;
     } else {
         unshare(CloneFlags::CLONE_NEWNS)?;
         log::debug!("[pam_isolate] unshare(CLONE_NEWNS) successful.");
@@ -278,7 +299,7 @@ pub fn create_namespaces(
     // We have to make sure to unlock the file afterwards, even in the case of an error!
     let result =
         create_namespaces_exclusive(rt, username, uid, gid, mount_config, user_env, loopback);
-    let result2 = fs4::FileExt::unlock(&lock_file);
+    let result2 = fs4::fs_std::FileExt::unlock(&lock_file);
 
     if result.is_err() {
         drop(lock_file);

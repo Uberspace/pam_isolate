@@ -1,15 +1,16 @@
 use core::slice;
 use std::{
-    ffi::{c_char, c_int, CStr, CString, OsStr, OsString},
+    ffi::{CStr, CString, OsStr, OsString, c_char, c_int},
     os::unix::prelude::OsStrExt,
     path::PathBuf,
 };
 
 use clap::Parser;
-use lib_pam_isolate::{create_namespaces, try_setup_sysctl, Config};
+use lib_pam_isolate::{Config, create_namespaces, try_setup_sysctl};
 use log::LevelFilter;
 use nix::unistd::User;
 use pam::{constants::PamResultCode, module::PamHandle};
+use systemd_journal_logger::JournalLog;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -19,8 +20,8 @@ struct Args {
     log_level: LevelFilter,
 }
 
-extern "C" {
-    fn pam_putenv(pamh: *const PamHandle, name_value: *const c_char);
+unsafe extern "C" {
+    unsafe fn pam_putenv(pamh: *const PamHandle, name_value: *const c_char);
 }
 
 fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
@@ -55,8 +56,8 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
             let s = CString::new(format!("{key}={value}")).unwrap();
             unsafe {
                 pam_putenv(pamh as *const PamHandle, s.as_ptr());
+                std::env::set_var(key, value);
             }
-            std::env::set_var(key, value);
         },
     )?;
 
@@ -73,7 +74,7 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
 ///
 /// # Safety
 /// Only called by C code, which presumably knows what it's doing. `argv` needs to point to valid memory.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn pam_sm_open_session(
     pamh: *mut PamHandle,
     _flags: c_int,
@@ -81,18 +82,22 @@ pub unsafe extern "C" fn pam_sm_open_session(
     argv: *const *const u8,
 ) -> PamResultCode {
     let arg0 = OsString::new();
-    let args = std::iter::once(arg0.as_ref()).chain(
+    let args = std::iter::once(arg0.as_ref()).chain(unsafe {
         slice::from_raw_parts(argv, argc as _)
             .iter()
-            .map(|arg| OsStr::from_bytes(CStr::from_ptr(*arg as *const i8).to_bytes())),
-    );
+            .map(|arg| OsStr::from_bytes(CStr::from_ptr(*arg as *const i8).to_bytes()))
+    });
 
     let args = Args::parse_from(args);
 
-    systemd_journal_logger::init_with_extra_fields(vec![("OBJECT_EXE", "pam_isolate.so")]).unwrap();
+    JournalLog::new()
+        .unwrap()
+        .with_extra_fields(vec![("OBJECT_EXE", "pam_isolate.so")])
+        .install()
+        .unwrap();
     log::set_max_level(args.log_level);
 
-    match open_session(args, &*pamh) {
+    match open_session(args, unsafe { &*pamh }) {
         Ok(()) => PamResultCode::PAM_SUCCESS,
         Err(err) => {
             log::error!("[pam_isolate] open_session: {err:?}");
@@ -101,7 +106,7 @@ pub unsafe extern "C" fn pam_sm_open_session(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn pam_sm_close_session(
     _pamh: *mut PamHandle,
     _flags: c_int,
