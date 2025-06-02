@@ -9,8 +9,8 @@ Vagrant.configure("2") do |config|
         mount --make-private /
         cp -r /home/vagrant/.ssh /root
         cp /vagrant/config.toml /etc/pam_isolate.toml
-        cp /vagrant/target/debug/libpam_isolate.so /lib64/security/pam_isolate.so
-        cp /vagrant/target/debug/wrapns /usr/local/bin/
+        cp /vagrant/target/x86_64-unknown-linux-gnu/release/libpam_isolate.so /lib64/security/pam_isolate.so
+        cp /vagrant/target/x86_64-unknown-linux-gnu/release/wrapns /usr/local/bin/
         chmod +s /usr/local/bin/wrapns
         echo "session [success=1 default=ignore] pam_succeed_if.so quiet uid eq 0" >> /etc/pam.d/sshd
         echo "session required pam_isolate.so --config /etc/pam_isolate.toml --log-level DEBUG" >> /etc/pam.d/sshd
