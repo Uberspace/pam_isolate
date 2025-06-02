@@ -149,6 +149,16 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
                 .add(in_index, IpAddr::V6(in_addr.v6), in_addr.v6_prefix_len)
                 .execute()
                 .await?;
+            handle
+                .link()
+                .set(
+                    LinkMessageBuilder::<LinkUnspec>::default()
+                        .index(in_index)
+                        .up()
+                        .build(),
+                )
+                .execute()
+                .await?;
         }
 
         Ok(())
