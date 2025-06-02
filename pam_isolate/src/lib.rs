@@ -32,8 +32,10 @@ fn open_session(args: Args, pamh: &PamHandle) -> anyhow::Result<()> {
         .build()?;
 
     let username = pamh
-        .get_user(None)
-        .map_err(|err| anyhow::anyhow!("get_user: {err:?}"))?;
+        .get_item::<pam::items::User>()
+        .map_err(|err| anyhow::anyhow!("get_user: {err:?}"))?
+        .ok_or(anyhow::anyhow!("No username"))?;
+    let username = String::from_utf8(username.to_bytes().to_vec())?;
     if !config.users.ignore.is_empty() && config.users.ignore.contains(&username) {
         log::debug!("[pam_isolate] Ignored user {username}.");
         return Ok(());
