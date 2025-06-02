@@ -88,13 +88,12 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
 
         let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
         let links = handle.link().add(
-            LinkVeth::new(&out_name, &in_name)
+            LinkVeth::new(&in_name, &out_name)
                 .append_extra_attribute(LinkAttribute::NetNsFd(netns_fd.as_raw_fd()))
                 .build(),
         );
-        let result = links.execute().await;
+        links.execute().await?;
         close(netns_fd)?;
-        result?;
         log::info!("[pam_isolate] Link created");
 
         let (out_addr, in_addr) = generate_veth_addresses(uid);
@@ -287,11 +286,12 @@ pub fn create_namespaces(
     let lock_file = OpenOptions::new()
         .read(true)
         .write(true)
+        .truncate(false)
         .create(true)
         .open(&lock_path)?;
     lock_file.lock_exclusive()?;
     set_env(user_env, &uid.to_string());
-    log::debug!("[pam_isolate] set {user_env}={}", uid.to_string());
+    log::debug!("[pam_isolate] set {user_env}={uid}");
     for (var, content) in std::env::vars() {
         log::debug!("[pam_isolate] var {var} = {content}");
     }
