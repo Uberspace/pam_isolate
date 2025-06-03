@@ -35,22 +35,34 @@ struct AddressPair {
     v6_prefix_len: u8,
 }
 
-// TODO: pass UID as parameter here (ignored for now)
-fn generate_veth_addresses(_uid: Uid) -> (AddressPair, AddressPair) {
-    (
+fn generate_veth_addresses(uid: Uid) -> anyhow::Result<(AddressPair, AddressPair)> {
+    if uid.as_raw() < 1000 {
+        anyhow::bail!("UID must be at least 1000, got {}", uid.as_raw());
+    }
+    // we got 14 bits to work with in 100.b01yyyyyy.yyyyyyyy.1/2
+    if uid.as_raw() > 2u32.pow(14) {
+        anyhow::bail!(
+            "UID must be less than or equal to 2^14, got {}",
+            uid.as_raw()
+        );
+    }
+    let uid = (uid.as_raw() - 1000) as u16;
+    let [uid_upper, uid_lower] = uid.to_be_bytes();
+
+    Ok((
         AddressPair {
-            v4: Ipv4Addr::new(100, 64, 255, 1),
+            v4: Ipv4Addr::new(100, 64 + uid_upper, uid_lower, 1),
             v4_prefix_len: 24,
-            v6: Ipv6Addr::new(0xfd75, 0x6272, 0x7370, 0xffff, 0, 0, 0, 0x0001),
+            v6: Ipv6Addr::new(0xfd75, 0x6272, 0x7370, uid, 0, 0, 0, 0x0001),
             v6_prefix_len: 64,
         },
         AddressPair {
-            v4: Ipv4Addr::new(100, 64, 255, 2),
+            v4: Ipv4Addr::new(100, 64 + uid_upper, uid_lower, 2),
             v4_prefix_len: 24,
-            v6: Ipv6Addr::new(0xfd75, 0x6272, 0x7370, 0xffff, 0, 0, 0, 0x0002),
+            v6: Ipv6Addr::new(0xfd75, 0x6272, 0x7370, uid, 0, 0, 0, 0x0002),
             v6_prefix_len: 64,
         },
-    )
+    ))
 }
 
 async fn get_link_index(handle: &rtnetlink::Handle, name: &str) -> anyhow::Result<Option<u32>> {
@@ -96,7 +108,7 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
         close(netns_fd)?;
         log::info!("[pam_isolate] Link created");
 
-        let (out_addr, in_addr) = generate_veth_addresses(uid);
+        let (out_addr, in_addr) = generate_veth_addresses(uid)?;
         if let Some(out_index) = get_link_index(&handle, &out_name).await? {
             handle
                 .address()
