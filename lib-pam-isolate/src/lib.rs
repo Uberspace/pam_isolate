@@ -245,6 +245,7 @@ fn create_namespaces_exclusive(
             Mode::empty(),
         )?;
         setns(mntns_fd, CloneFlags::CLONE_NEWNS)?;
+        log::info!("[pam_isolate] Attachment successful.");
     } else {
         unshare(CloneFlags::CLONE_NEWNS)?;
         log::debug!("[pam_isolate] unshare(CLONE_NEWNS) successful.");
@@ -283,7 +284,7 @@ pub fn create_namespaces(
         ));
     }
     let run_path: PathBuf = ["/", "var", "run", "pam_isolate"].iter().collect();
-    std::fs::create_dir_all(&run_path).expect("mkdir {run_path}");
+    std::fs::create_dir_all(&run_path)?;
 
     let mut lock_path = run_path;
     lock_path.push(format!("lock_{uid}"));
