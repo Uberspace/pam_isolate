@@ -1,3 +1,3 @@
 # ip(1) leaves a single trailing space, which we sed away.
 [vagrant@remote]$ ip a | grep fd75: | sed 's/ $//'
-    inet6 fd75:6272:7370:ffff::2/64 scope global
+inet6 fd75:6272:7370::2/64 scope global
