@@ -22,3 +22,8 @@ Hello World!
 
 1. install [shellinspector](https://github.com/Uberspace/shellinspector)
 1. `make test`
+
+## Notes
+
+- You need to run `mount --make-private /` after every reboot to make
+    mount namespaces work.
