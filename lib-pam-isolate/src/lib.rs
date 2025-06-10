@@ -99,6 +99,8 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
         let in_name = format!("veth_{uid}_in");
 
         let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
+        log::info!("[pam_isolate] Netns file created");
+
         let links = handle.link().add(
             LinkVeth::new(&in_name, &out_name)
                 .append_extra_attribute(LinkAttribute::NetNsFd(netns_fd.as_raw_fd()))
@@ -120,6 +122,8 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
                 .add(out_index, IpAddr::V6(out_addr.v6), out_addr.v6_prefix_len)
                 .execute()
                 .await?;
+            log::info!("[pam_isolate] Outside addresses set");
+
             handle
                 .link()
                 .set(
@@ -130,6 +134,7 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
                 )
                 .execute()
                 .await?;
+            log::info!("[pam_isolate] Outside interface set UP");
         }
 
         // We need to set up a new connection here in order to move to the new namespace for this operation.
@@ -147,7 +152,9 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
                 )
                 .execute()
                 .await?;
-            log::info!("[pam_isolate] Found loopback at index {lo_index}, set up");
+            log::info!("[pam_isolate] Found loopback at index {lo_index}, set UP");
+        } else {
+            log::info!("[pam_isolate] Could not find lookpack interface");
         }
 
         if let Some(in_index) = get_link_index(&handle, &in_name).await? {
@@ -161,6 +168,8 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
                 .add(in_index, IpAddr::V6(in_addr.v6), in_addr.v6_prefix_len)
                 .execute()
                 .await?;
+            log::info!("[pam_isolate] Inside addresses set");
+
             handle
                 .link()
                 .set(
@@ -171,6 +180,7 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
                 )
                 .execute()
                 .await?;
+            log::info!("[pam_isolate] Inside interface set UP");
         }
 
         Ok(())
