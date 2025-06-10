@@ -19,8 +19,8 @@ use nix::{
     unistd::{Gid, Pid, Uid, close, getpid},
 };
 use rtnetlink::{
-    LinkMessageBuilder, LinkUnspec, LinkVeth, NetworkNamespace, new_connection,
-    packet_route::link::LinkAttribute,
+    LinkMessageBuilder, LinkUnspec, LinkVeth, NetworkNamespace, RouteMessageBuilder,
+    new_connection, packet_route::link::LinkAttribute,
 };
 use sysctl::{Ctl, CtlValue, Sysctl};
 use tokio::runtime::Runtime;
@@ -181,6 +181,32 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
                 .execute()
                 .await?;
             log::info!("[pam_isolate] Inside interface set UP");
+
+            handle
+                .route()
+                .add(
+                    RouteMessageBuilder::<Ipv4Addr>::default()
+                        .destination_prefix(Ipv4Addr::UNSPECIFIED, 0)
+                        .gateway(out_addr.v4)
+                        .output_interface(in_index)
+                        .build(),
+                )
+                .replace()
+                .execute()
+                .await?;
+            handle
+                .route()
+                .add(
+                    RouteMessageBuilder::<Ipv6Addr>::default()
+                        .destination_prefix(Ipv6Addr::UNSPECIFIED, 0)
+                        .gateway(out_addr.v6)
+                        .output_interface(in_index)
+                        .build(),
+                )
+                .replace()
+                .execute()
+                .await?;
+            log::info!("[pam_isolate] Default routes added");
         }
 
         Ok(())
