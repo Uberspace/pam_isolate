@@ -14,7 +14,9 @@ pub struct Users {
 
 #[derive(Debug, Default, Deserialize)]
 pub struct Mount {
+    #[serde(default)]
     pub tmp: String,
+    #[serde(default)]
     pub size: String,
 }
 
@@ -29,7 +31,7 @@ pub struct Config {
     pub users: Users,
     #[serde(default = "default_log_level")]
     pub log_level: LevelFilter,
-    pub mount: Mount,
+    pub mount: Option<Mount>,
     #[serde(default = "default_user_env")]
     pub user_env: String,
     pub net: Net,
@@ -42,7 +44,7 @@ impl Default for Config {
         Config {
             users: Default::default(),
             log_level: default_log_level(),
-            mount: Default::default(),
+            mount: None,
             user_env: default_user_env(),
             net: Net {
                 loopback: "lo".to_owned(),

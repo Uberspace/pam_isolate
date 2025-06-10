@@ -239,11 +239,16 @@ fn create_namespaces_exclusive(
     username: &str,
     uid: Uid,
     gid: Gid,
-    mount_config: &config::Mount,
+    mount_config: &Option<config::Mount>,
     user_env: &str,
     loopback: &str,
 ) -> anyhow::Result<()> {
     rt.block_on(create_interface(username, uid, loopback))?;
+
+    let mount_config = match mount_config {
+        Some(val) => val,
+        None => return Ok(()),
+    };
 
     let first_pid = get_first_process_by_uid_or_env(uid, user_env)?;
 
@@ -285,7 +290,7 @@ pub fn create_namespaces(
     username: &str,
     uid: Uid,
     gid: Gid,
-    mount_config: &config::Mount,
+    mount_config: &Option<config::Mount>,
     user_env: &str,
     loopback: &str,
     set_env: impl Fn(&str, &str),
