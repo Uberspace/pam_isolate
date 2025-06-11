@@ -91,12 +91,34 @@ async fn create_interface(username: &str, uid: Uid, loopback: &str) -> anyhow::R
     } else {
         let (connection, handle, _) = new_connection()?;
         tokio::spawn(connection);
-        let netns_path = NetworkNamespace::child_process_create_ns(netns)?;
-        NetworkNamespace::unshare_processing(netns_path.clone())?;
-        log::info!("[pam_isolate] Created net namespace {netns_path:?}");
 
         let out_name = format!("veth_{uid}_out");
         let in_name = format!("veth_{uid}_in");
+
+        log::info!("[pam_isolate] Checking if {out_name} already exists from a previous user");
+        match get_link_index(&handle, &out_name).await {
+            Ok(Some(out_index)) => {
+                log::info!("[pam_isolate] Interface {out_name} already exists. Cleaning up...");
+                handle.link().del(out_index).execute().await?;
+                log::info!("[pam_isolate] Deleted existing interface {out_name}");
+            }
+            Ok(None) => {
+                log::info!("[pam_isolate] Interface {out_name} does not exist. Proceeding...");
+            }
+            Err(e) => {
+                if let Some(io_err) = e.downcast_ref::<std::io::Error>() {
+                    if io_err.raw_os_error() != Some(19) {
+                        log::warn!(
+                            "[pam_isolate] Failed to check existence of {out_name}: {e}. Proceeding..."
+                        );
+                    }
+                }
+            }
+        }
+
+        let netns_path = NetworkNamespace::child_process_create_ns(netns)?;
+        NetworkNamespace::unshare_processing(netns_path.clone())?;
+        log::info!("[pam_isolate] Created net namespace {netns_path:?}");
 
         let netns_fd = open(Path::new(&netns_path), OFlag::O_RDONLY, Mode::empty())?;
         log::info!("[pam_isolate] Netns file created");
